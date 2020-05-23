@@ -1,3 +1,7 @@
+from collections import defaultdict
+
+import orjson as json
+
 # Questions:
 # > * The prompt suggests that stocks are only for a single company but I want
 # >   to make sure I'm not expected to build a
@@ -53,21 +57,6 @@
 # this detail to the doc.
 
 
-request = {
-    'name': 'Salt Bae',
-    'amount': 10,
-    'class': 'CS'  # PS
-}
-
-response = {
-    'copmany': 'Impossible Cuts Inc.',
-    'owner': 'Salt Bae',
-    'shares': 10,
-    'cert_id': 'CS-32'  # PS-11
-}
-
-VALID_SHARE_CLASSES = set(['CS', 'PS'])
-
 def increment(last_at=0):
     """
     A count generator.
@@ -82,90 +71,68 @@ def increment(last_at=0):
         yield i
 
 
-from collections import defaultdict
-# Holds the counters for each share class.
-# `defaultdict` allows creating keys with a default value upon looking up of a
-# non-existent key.
-id_generator_by_share_class = defaultdict(increment)
+class StockCertificateGeneratorApp:
 
+    def __init__(self, company_name):
+        # Holds the counters for each share class. `defaultdict` allows creating
+        # keys with a default value upon looking up of a non-existent key.
+        self._counter_by_share_class = defaultdict(increment)
+        self.company_name = company_name
 
-def generate_cert(company, share_class, stakeholder, share_amount):
-    id_generator = id_generator_by_share_class[share_class]
-    return {
-        'id': f'{share_class}-{next(id_generator)}',
-        'company': company,
-        'stakeholder': stakeholder,
-        'amount': share_amount,
-    }
+    def get_next_cert_id(self, share_class):
+        return next(self._counter_by_share_class[share_class])
 
+    async def __call__(self, scope, receive, send):
+        message = await receive()
+        # print('message:', message)
+        payload = json.loads(message['body'])
+        response_headers_event = {
+            'type': 'http.response.start',
+            'status': 200,
+            'headers': [
+                [b'content-type', b'application/json; charset=utf-8'],
+            ]
+        }
+        try:
+            share_cert = self.generate_cert(
+                self.get_next_cert_id(payload['class']),
+                payload['class'],
+                payload['name'],
+                payload['amount']
+            )
+            response_body_event = {
+                'type': 'http.response.body',
+                'body': share_cert,
+            }
+        except Exception as err:
+            response_headers_event['status'] = 500
+            response_body_event = {
+                'type': 'http.response.body',
+                'body': {'error': str(err)},
+            }
 
-class StockGeneratorApp:
-    pass
+        yield response_headers_event
 
-
-async def save_state():
-    pass
-
-
-async def restore_state():
-    pass
-
-
-async def lifespan_handler(scope):
-    pass
-
-
-
-import orjson as json
-COMPANY_NAME = 'Impossible Cuts Inc.'
-
-async def request_handler(scope, receive, send):
-    message = await receive()
-    # print('message:', message)
-    payload = json.loads(message['body'])
-    response_headers_event = {
-        'type': 'http.response.start',
-        'status': 200,
-        'headers': [
-            [b'content-type', b'application/json; charset=utf-8'],
-        ]
-    }
-    try:
-        share_cert = generate_cert(
-            COMPANY_NAME,
-            payload['class'],
-            payload['name'],
-            payload['amount']
+        response_body_event['body'] = json.dumps(
+            response_body_event['body']
         )
-        response_body_event = {
-            'type': 'http.response.body',
-            'body': share_cert,
+
+        yield response_body_event
+
+    def generate_cert(self, cert_id, share_class, stakeholder, share_amount):
+        return {
+            'id': f'{share_class}-{cert_id}',
+            'company': self.company_name,
+            'stakeholder': stakeholder,
+            'amount': share_amount,
         }
-    except Exception as err:
-        response_headers_event['status'] = 500
-        response_body_event = {
-            'type': 'http.response.body',
-            'body': {'error': str(err)},
-        }
-
-    yield response_headers_event
-
-    response_body_event['body'] = json.dumps(
-        response_body_event['body']
-    )
-
-    yield response_body_event
 
 
-scope_handlers_by_scope_type = {
-    'lifespan': lifespan_handler,
-    'http': request_handler
-}
+stock_certificate_generator = StockCertificateGeneratorApp('Impossible Cuts Inc.')
 
 
 async def app(scope, receive, send):
     # TODO: With scope = {'type': 'lifespan'}, save counter states to disk on
     # shutdown.
-    scope_handler = scope_handlers_by_scope_type[scope['type']]
-    async for response in scope_handler(scope, receive, send):
+    async for response in stock_certificate_generator(scope, receive, send):
         await send(response)
