@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 
 from collections import defaultdict
 from pathlib import Path
@@ -20,37 +21,68 @@ class StockDb:
 
     def __init__(self, db_filename):
         self.db_filename = Path(db_filename)
+        self._shares_inventory = {}
         self._load_data_from_disk()
+        self._db_file = self.db_filename.open('a')  # open file in append mode
 
     def register(self, share_class, amount):
         """
         Will add `amount` new shares `share_class` to the database. The action
         will be ignored if `share_class` already exists.
         """
-        if share_class in self.shares_inventory:
+        if share_class in self._shares_inventory:
             return
 
-        self.shares_inventory[share_class] = {
+        self._shares_inventory[share_class] = {
             'issued_certificates': 0,
             'amount': amount,
         }
 
     def _load_data_from_disk(self):
         if not self.db_filename.exists():
-            self.shares_inventory = {}
             return
 
+        # Open file, seek to the end of it, and backtrack until we find a `\n`,
+        # excluding the trailing `\n`.
         with self.db_filename.open('rb') as f:
-            self.shares_inventory = json.loads(f.read())
+            f.seek(-2, os.SEEK_END)  # move to EOF and skip trailing newline
+            line_length = 0  # keep track of how long the last line is
+            while f.read(1) != b'\n':  # consume 1 char
+                f.seek(-2, os.SEEK_CUR)  # backtrack
+                line_length += 1
+            f.read(1)  # consume the first `|`
+            serialized = f.read(line_length - 1).decode()
+
+        for stock in serialized.split('|'):
+            share_class, amount, issued_certificates = stock.split(':', 2)
+            self._shares_inventory[share_class] = {
+                'issued_certificates': int(issued_certificates),
+                'amount': int(amount),
+            }
 
     def save(self):
         """
-        Persist database to disk.
+        Persist data to disk.
+
+        The data is serialized to disk in the form:
+
+        ```
+        |<share_class>:<amount>:<issued_certificates>[, ...]\n
+        ```
+
+        For example:
+
+        ```
+        |CS:2587320:1268|PS:694140:5586\n
+        ```
         """
-        db_dump = json.dumps(self.shares_inventory)
-        print('Dumping memory to disk:', db_dump)
-        with self.db_filename.open('wb') as f:
-            f.write(db_dump)
+        for share_class, share_data in self._shares_inventory.items():
+            serialized = f'|{share_class}:{share_data["amount"]}:{share_data["issued_certificates"]}'
+            self._db_file.write(serialized)
+        self._db_file.write('\n')
+
+        # TODO: we could imagine a maintenance function to compact the data file
+        # on server start-up if the file size became a problem.
 
     async def grant(self, grant_request):
         """
@@ -61,16 +93,16 @@ class StockDb:
         If there are insufficient shares to satisfy the request, return `False`.
         """
         share_class = grant_request['share_class']
-        if share_class not in self.shares_inventory:
+        if share_class not in self._shares_inventory:
             return False
 
-        shares = self.shares_inventory[share_class]
+        shares = self._shares_inventory[share_class]
         grant_amount = grant_request['share_amount']
         # TODO: acquire lock? Since it runs in the context of a corouting, it shouldn't be a problem.
         if shares['amount'] - grant_amount >= 0:
             shares['amount'] -= grant_amount
             shares['issued_certificates'] += 1
-            # self.save()  # should we save on every update?
+            self.save()
 
             return shares['issued_certificates']
 
@@ -129,10 +161,6 @@ if __name__ == '__main__':
         asyncio.run(stock_db.serve(DB_HOST, DB_PORT))
     except KeyboardInterrupt:
         logging.info("Bye!")
-    finally:
-        # TODO: we should likely call .save() on a on-going basis to reduce
-        # data corruption with power failures or kill -9
-        stock_db.save()
 
 
 class ConnectionPool:
