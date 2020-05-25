@@ -187,7 +187,9 @@ Transfer/sec:      3.18MB
 > NOTE: Don't confuse "Req/Sec" (per thread) and Requests/sec (total).
 
 Running it multiple times in a row show more consistent results compared by
-`ab`. Note: you might get 403s after you run out of shares and if you do the
+`ab`.
+
+> Note: you might get 403s after you run out of shares and if you do the
 mention "Non-2xx or 3xx responses" will appear:
 
 ```
