@@ -184,7 +184,7 @@ Requests/sec:  13324.21
 Transfer/sec:      3.18MB
 ```
 
-> **NOTE:** Don't confuse "Req/Sec" (per thread) and Requests/sec (total).
+> **NOTE:** Don't confuse `Req/Sec` (per thread) with `Requests/sec` (total).
 
 Running it multiple times in a row show more consistent results compared by
 `ab`.
