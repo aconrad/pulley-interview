@@ -28,7 +28,7 @@ requests from `ab`.
 gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
 
-NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
+> NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 The server will spawn one process per logical CPUs on the Mac. If you don't have
 a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
@@ -38,13 +38,11 @@ a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
 This will run `StockInventoryService`. It's the backend service that tracks
 inventory changes. In a separate terminal run:
 
-NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
-
 ```bash
 python3 stock_cert_server.py
 ```
 
-NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
+> NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 ## Benchmark
 
@@ -72,6 +70,11 @@ ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0
 # Request preferred stock
 ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_PS.data 'http://127.0.0.1:8000/'
 ```
+
+> NOTE: I noticed that running `ab` twice in a row on MacOs must put some sort
+of strain on the kernel/network and causes the second run to hang for a few
+seconds at ~6000 requests but it eventually finishes within a few more seconds.
+I give it ~40 seconds between runs to show best results.
 
 ```
 This is ApacheBench, Version 2.3 <$Revision: 1843412 $>
@@ -132,6 +135,71 @@ Percentage of the requests served within a certain time (ms)
   98%      2
   99%      2
  100%     22 (longest request)
+```
+
+## Benchmark with `wrk` (instead of `ab`)
+
+Because `ab` seemed so finicky, I took a look at other benchmarking tools and
+`wrk` seems popular, and was a lot more stable in my experience. Install `wrk`:
+
+```bash
+brew install wrk
+```
+
+Prep the `POST` data:
+
+```bash
+cat > salt-bae-1share-ps.lua<<EOF
+wrk.method = "POST"
+wrk.body = '{"name":"Salt Bae","amount":1,"class":"PS"}'
+wrk.headers["Content-Type"] = "application/json"
+EOF
+
+cat > salt-bae-1share-cs.lua<<EOF
+wrk.method = "POST"
+wrk.body = '{"name":"Salt Bae","amount":1,"class":"CS"}'
+wrk.headers["Content-Type"] = "application/json"
+EOF
+```
+
+Then run the benchmark (it will go for 10 seconds by default):
+
+```bash
+wrk -s salt-bae-1share-cs.lua -c 20 -t 20 http://127.0.0.1:8000/
+wrk -s salt-bae-1share-ps.lua -c 20 -t 20 http://127.0.0.1:8000/
+#   ^ use .lua file           ^     ^ 20 threads
+#                             | 20 concurrent requests
+```
+
+Results:
+
+```
+Running 10s test @ http://127.0.0.1:8000/
+  20 threads and 20 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.50ms  292.17us   7.77ms   69.54%
+    Req/Sec   669.61     91.80     0.88k    70.25%
+  133438 requests in 10.01s, 31.84MB read
+Requests/sec:  13324.21
+Transfer/sec:      3.18MB
+```
+
+> NOTE: Don't confuse "Req/Sec" (per thread) and Requests/sec (total).
+
+Running it multiple times in a row show more consistent results compared by
+`ab`. Note: you might get 403s after you run out of shares and if you do the
+mention "Non-2xx or 3xx responses" will appear:
+
+```
+Running 10s test @ http://127.0.0.1:8000/
+  20 threads and 20 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.50ms  277.19us   3.82ms   65.93%
+    Req/Sec   669.63     86.49     0.90k    68.25%
+  133417 requests in 10.01s, 28.82MB read
+  Non-2xx or 3xx responses: 61643
+Requests/sec:  13322.89
+Transfer/sec:      2.88MB
 ```
 
 ## Approach

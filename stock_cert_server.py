@@ -98,6 +98,7 @@ class StockInventoryService:
 
         If there are insufficient shares to satisfy the request, return `False`.
         """
+        logging.debug(grant_request)
         share_class = grant_request['share_class']
         if share_class not in self._shares_inventory:
             return False
@@ -305,6 +306,7 @@ class StockCertificateApi:
         # Read the request payload
         message = await receive()
         payload = json.loads(message['body'])
+        logging.debug(f'payload: {payload}')
 
         # Request the grant
         grant_response = await self._request_grant(
