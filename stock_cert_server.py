@@ -9,11 +9,14 @@ import orjson as json
 
 
 """
-                      +--------+
-                   +--------+  |
-                   | client |--+
-                   +--------+
-                      |   |
+                        +---(benchmark client)----+
+                     +---(benchmark client)----+  |
+                  +---(benchmark client)----+  |--+
+               +---(benchmark client)----+  |--+
+               |    HTTP JSON REQUEST  |--+
+               +-----------------------+
+                      |   |   |
+                      |   |   v
                       |   v
                       v
             +-------------------------------+
