@@ -7,23 +7,29 @@ from pathlib import Path
 
 import orjson as json
 
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    level=logging.INFO
+    # level=logging.DEBUG
+)
 
-class StockDb:
+
+class StockInventoryService:
     """
-    This class represents the stocks database server. It holds information about
-    the available share classes, their amount, and how many certificates have
+    This class represents the stock inventory server. It holds information about
+    the available share classes, their amount, and how many stock grants have
     been issued for each share class.
 
     Upon start-up, it will load the provided stock database from disk (if
-    available) into memory and start listening to a TCP port. Upon exit, the
-    database will be persisted to disk.
+    available) into memory and start listening to a TCP port.
     """
 
     def __init__(self, db_filename):
         self.db_filename = Path(db_filename)
         self._shares_inventory = {}
         self._load_data_from_disk()
-        self._db_file = self.db_filename.open('a')  # open file in append mode
+        self._transaction_log = self.db_filename.open('a')  # open file in append mode
 
     def register(self, share_class, amount):
         """
@@ -78,8 +84,8 @@ class StockDb:
         """
         for share_class, share_data in self._shares_inventory.items():
             serialized = f'|{share_class}:{share_data["amount"]}:{share_data["issued_certificates"]}'
-            self._db_file.write(serialized)
-        self._db_file.write('\n')
+            self._transaction_log.write(serialized)
+        self._transaction_log.write('\n')
 
         # TODO: we could imagine a maintenance function to compact the data file
         # on server start-up if the file size became a problem.
@@ -87,8 +93,8 @@ class StockDb:
     async def grant(self, grant_request):
         """
         Return a grant ID for a request `grant_request`. The number of shares
-        from the grant request will be deducted from the total amount of
-        available shares.
+        from the grant request will be deducted from the total amount of shares
+        available.
 
         If there are insufficient shares to satisfy the request, return `False`.
         """
@@ -98,7 +104,8 @@ class StockDb:
 
         shares = self._shares_inventory[share_class]
         grant_amount = grant_request['share_amount']
-        # TODO: acquire lock? Since it runs in the context of a corouting, it shouldn't be a problem.
+        # Note: As long as this server is running in a single thread/process, we
+        # shouldn't need locking.
         if shares['amount'] - grant_amount >= 0:
             shares['amount'] -= grant_amount
             shares['issued_certificates'] += 1
@@ -112,6 +119,15 @@ class StockDb:
         `writer`. If the grant isn't approved, write an error instead.
         """
         request_data = await reader.read(1000)
+
+        # The client may have disconnected
+        if not request_data:
+            writer.close()
+            await writer.wait_closed()
+            addr = writer.get_extra_info('peername')
+            logging.info(f'Closed connection {addr}')
+            return
+
         request_data = json.loads(request_data)
 
         # Ignore requests that aren't for a grant, that shouldn't happen...
@@ -139,7 +155,9 @@ class StockDb:
         """
         # Handle a connection forever, never close it so it can be reused by the
         # client for connection pooling purposes.
-        while True:
+        addr = writer.get_extra_info('peername')
+        logging.info(f'Received connection {addr}')
+        while not writer.is_closing():
             await self.handle_request(reader, writer)
 
     async def serve(self, host, port):
@@ -150,10 +168,10 @@ class StockDb:
             await server.serve_forever()
 
 
-DB_HOST, DB_PORT = ('localhost', 8001)
+DB_HOST, DB_PORT = ('127.0.0.1', 8001)
 
 if __name__ == '__main__':
-    stock_db = StockDb('stockdb.dat')
+    stock_db = StockInventoryService('stockdb.dat')
     stock_db.register('CS', 2600000)  # 2.6M
     stock_db.register('PS', 750000)  # 750K
 
@@ -176,7 +194,10 @@ class ConnectionPool:
         """
         Return a tuple of reader/writer streams.
         """
-        return await asyncio.open_connection(self._host, self._port)
+        reader, writer = await asyncio.open_connection(self._host, self._port)
+        addr = writer.get_extra_info('peername')
+        logging.info(f'Opened connection {addr}')
+        return reader, writer
 
     async def acquire(self):
         """
@@ -184,11 +205,15 @@ class ConnectionPool:
         available from the DB connection pool, a new one will be spawn.
         """
         if not self._conn_pool:
-            db_reader, db_writer = await self._new()
+            reader, writer = await self._new()
         else:
-            db_reader, db_writer = self._conn_pool.pop()
+            reader, writer = self._conn_pool.pop()
 
-        return (db_reader, db_writer)
+            # If the connection is closed, try the next one
+            # if writer.is_closing():
+            #     reader, writer = await self.acquire()  # recursive
+
+        return (reader, writer)
 
     def release(self, reader, writer):
         """
@@ -197,7 +222,7 @@ class ConnectionPool:
         self._conn_pool.append((reader, writer))
 
 
-class StockCertificateGeneratorApp:
+class StockCertificateApi:
     """
     A web server to handle incoming JSON requests.
     """
@@ -222,6 +247,15 @@ class StockCertificateGeneratorApp:
         await stock_db_writer.drain()
 
         grant_response = await stock_db_reader.read(1000)
+        logging.debug(f'grant_response: {grant_response}')
+
+        if not grant_response:  # the server may have disconnected, retry...
+            stock_db_writer.close()
+            await stock_db_writer.wait_closed()
+            addr = stock_db_writer.get_extra_info('peername')
+            logging.info(f'Closed connection {addr}')
+            return await self._request_grant(share_class, share_amount)
+
         self._db_conn_pool.release(stock_db_reader, stock_db_writer)
         return json.loads(grant_response)
 
@@ -290,9 +324,9 @@ class StockCertificateGeneratorApp:
         yield response_body
 
 
-db_connection_pool = ConnectionPool(DB_HOST, DB_PORT)
-stock_cert_generator = StockCertificateGeneratorApp(
-    db_connection_pool,
+stock_inventory_conn_pool = ConnectionPool(DB_HOST, DB_PORT)
+stock_cert_generator = StockCertificateApi(
+    stock_inventory_conn_pool,
     'Impossible Cuts Inc.'
 )
 
