@@ -208,39 +208,43 @@ Transfer/sec:      2.88MB
 
 Before I share my approach to the problem, let me restate the requirements:
 
-> Build an API endpoint where clients can concurrently generate valid paper
-> certificates.
+```md
+Build an API endpoint where clients can concurrently generate valid paper
+certificates.
 
-> The certificate ID is a combination of the share class abbreviation and a
-> number. The requirements for this number are:
+The certificate ID is a combination of the share class abbreviation and a
+number. The requirements for this number are:
 
-> * This number must start from 1 for a given share class. The very first common
+* This number must start from 1 for a given share class. The very first common
   stock certificate must be `CS-1`. The first preferred stock certificate must
   be `PS-1`.
-> * This number must be sequential for a given share class. There should be no
+* This number must be sequential for a given share class. There should be no
   gaps in the certificate numbers.
-> * This number must be unique for a given share class. There should be no
+* This number must be unique for a given share class. There should be no
   duplicates in the certificate numbers.
 
-> Make sure these constraints for the certificate ID holds when concurrent users
-> are generating certificates. It'd be bad if two certificates had the same ID
-> or if there was a gap between them!
+Make sure these constraints for the certificate ID holds when concurrent users
+are generating certificates. It'd be bad if two certificates had the same ID
+or if there was a gap between them!
 
-> The API endpoint should be able to respond within 100ms 99% of the time. It
-> should also be able to service 10,000 queries per second.
+The API endpoint should be able to respond within 100ms 99% of the time. It
+should also be able to service 10,000 queries per second.
+```
 
 The requirements were later updated with the following:
 
-> Each security class (common and preferred) is initialized with a total number
-> of authorized shares. If there aren’t enough shares left to be issued in
-> response to a request, it should return an error.
+```md
+Each security class (common and preferred) is initialized with a total number
+of authorized shares. If there aren’t enough shares left to be issued in
+response to a request, it should return an error.
 
-> The API endpoint should be able to respond within 100ms 99% of the time. It
-> should also be able to service thousands of queries per second. Use
-> apache benchmark with ~20 concurrent requests.
-> `ab -n 5000 -c 20 http://localhost:3000/`
+The API endpoint should be able to respond within 100ms 99% of the time. It
+should also be able to service thousands of queries per second. Use
+apache benchmark with ~20 concurrent requests.
+`ab -n 5000 -c 20 http://localhost:3000/`
 
-> generated certificate IDs should persist between server restarts
+generated certificate IDs should persist between server restarts
+```
 
 ### Build a single Python server
 
