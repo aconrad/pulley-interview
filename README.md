@@ -320,7 +320,7 @@ the latest known transaction so it can restart where it left off.
 ## Technology decisions
 
 * [Python](https://www.python.org/): I'm most comfortable with Python, despite
-  not known for not being the fastest language, I understand the language well
+  not known for being the fastest language, I understand the language well
   enough to squeeze the most performance out of it.
 
 * [Uvicorn](https://www.uvicorn.org/): To leverage async/await in Python within
