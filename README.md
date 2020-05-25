@@ -24,6 +24,8 @@ Once installed, we will have to start two services:
 This command will run the API server, `StockCertificateApi`. It handles incoming
 requests from `ab`.
 
+NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
+
 ```bash
 gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
@@ -34,7 +36,9 @@ a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
 ### Stock Inventory Service (TCP backend server)
 
 This will run `StockInventoryService`. It's the backend service that tracks
-inventory changes.
+inventory changes. In a separate terminal run:
+
+NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 ```bash
 python3 stock_cert_server.py
