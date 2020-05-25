@@ -25,7 +25,7 @@ This command will run the API server, `StockCertificateApi`. It handles incoming
 requests from `ab`.
 
 ```
-gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_gen_uvicorn:app
+gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
 
 The server will spawn one process per logical CPUs on the Mac. If you don't have
@@ -119,8 +119,7 @@ Percentage of the requests served within a certain time (ms)
 
 ## Approach
 
-Before I share my approach to the problem, let me restate the requirements of
-the problem:
+Before I share my approach to the problem, let me restate the requirements:
 
 > Build an API endpoint where clients can concurrently generate valid paper
 > certificates.
@@ -128,12 +127,12 @@ the problem:
 > The certificate ID is a combination of the share class abbreviation and a
 > number. The requirements for this number are:
 
-* This number must start from 1 for a given share class. The very first common
+> * This number must start from 1 for a given share class. The very first common
   stock certificate must be `CS-1`. The first preferred stock certificate must
   be `PS-1`.
-* This number must be sequential for a given share class. There should be no
+> * This number must be sequential for a given share class. There should be no
   gaps in the certificate numbers.
-* This number must be unique for a given share class. There should be no
+> * This number must be unique for a given share class. There should be no
   duplicates in the certificate numbers.
 
 > Make sure these constraints for the certificate ID holds when concurrent users
@@ -189,9 +188,7 @@ management.
 So I built a stock inventory service, `StockInventoryService`. With that, I was
 at a low ~1,000 req/s because each incoming requests from the API established a
 connection to the stock inventory service, and these TCP handshakes can be slow,
-even on localhost. I thought about using Unix Domain Socket to reduce the
-network overhead a fair amount (x5-7?) but realistically, these services wouldn't
-run on the same machine in a real world scenario.
+even on localhost.
 
 ### Introduce a connection pool
 
@@ -203,21 +200,48 @@ establish a new connection.
 
 With this change, I was running at ~12,000 req/s.
 
-### Don't use JSON between the two services
+### Data persistence
 
-JSON encoding turned out to be a bottle neck. I mana
+At first, I was saving the state of the stock inventory service by JSON-dumping
+the in-memory inventory data upon quitting the server (CTRL+C). That worked well
+but if the server were to crash (or `kill -9`), we could lose track of
+already-issued stock certificates.
 
-## Technology decision
+So I dumped the inventory data to a file every time the inventory changed. As
+expected, it brought the backend server to a crawl because of the disk I/O to
+rewrite the file, and likely JSON serialization on top of that.
+
+I still wanted to keep track of all the data changes for traceability purposes,
+so I decided that I would write a log of all the transactions in a file called
+`stockdb.dat`. This is done by opening the file in "append" mode. So whenever
+the stock inventory changes, you can see all the changes happening in this file.
+It's also a nice way to check that no certificates are duplicated or have gaps.
+
+To squeeze in more speed, I decided to write my own (basic) serialization
+protocol to spare myself from the the slower JSON serialization process.
+
+You see the transactions in realtime by running:
+
+```
+tail -f stockdb.dat
+```
+
+When the backend starts, it finds the last line in the log and uses that as the
+latest known transaction to restart where it left off. Granting more certificates.
+
+## Technology decisions
 
 * [Python](https://www.python.org/): I'm most comfortable with Python, despite
-  not know for not being the fastest language, I believe I understand the
-  language well enough to squeeze the most performance out of it.
+  not known for not being the fastest language, I understand the language well
+  enough to squeeze the most performance out of it.
 
 * [Uvicorn](https://www.uvicorn.org/): To leverage async/await in Python within
-  a web server, I had to use a web framework that supported the newer ASGI
-  protocol.
+  a web server, I had to use a web framework that supported the newer
+  [ASGI](https://asgi.readthedocs.io/en/latest/specs/main.html) protocol.
+  Uvicorn implements the ASGI protocol but it's somewhat bare in terms of
+  features for your everyday web framework.
 
-Things I have considered:
+Other technologies considered:
 
 * [Redis](https://redis.io/): I thought about using Redis as my backend
   inventory service. Operations are atomic and it's really good at incrementing
@@ -228,12 +252,28 @@ Things I have considered:
 * [Starlette](https://www.starlette.io/): Starlette is built on top of Uvicorn
   and provides many useful features for real web application development. But it
   would have added unnecessary overhead for my use case. URL matching/routing,
-  HTML templates, GraphQL support, WebSockets, etc. I didn't need any of it for
-  this exercise and it would have likely made the service a little slower.
+  HTML templates, GraphQL support, WebSockets, etc. I needed none of it for this
+  exercise and it would've likely made the service a little slower despite
+  having a nicer API. That said, for everyday coding, it's probably a good
+  choice for Python.
 
 * [Go](https://golang.org/): With a requirement of 10,000 reqs/s, I was unsure
-  if I could make it work in Python. I wrote a few barebones "hello world" HTTP
+  if I could make it work in Python. I wrote a few bare-bones "hello world" HTTP
   servers in Javascript, Python, and Go. Python and Javascript were about the
   same, but Go was significantly faster. Yet, Python wasn't far from the goals
-  and with multi-processing, I thought I could make it. And the learning curve
-  of Go would have been too involved for me.
+  and I thought I could make it with multi-processing.
+
+* [Unix Domain Socket](https://en.wikipedia.org/wiki/Unix_domain_socket): I
+  thought about using Unix Domain Socket to reduce the network overhead a fair
+  amount (x5-7?) between the frontend and backend services, but it's unlikely
+  that these services would run on the same machine in a real world scenario.
+  Also, the stock inventory service handles the load just fine despite being a
+  single-process server.
+
+* [Protobuf](https://developers.google.com/protocol-buffers): This could have
+  been used for communication between the frontend and backend service. But I
+  was already beyond 10,000 req/s so I decided that it was not necessary to
+  introduce this complexity at this stage. Worth considering, though.
+
+* [SQL DB](https://en.wikipedia.org/wiki/SQL): That seemed overkill to setup for
+  this exercise.
