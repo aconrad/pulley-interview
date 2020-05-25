@@ -272,15 +272,14 @@ Other technologies considered:
 * [Go](https://golang.org/): With a requirement of 10,000 reqs/s, I was unsure
   if I could make it work in Python. I wrote a few bare-bones "hello world" HTTP
   servers in Javascript, Python, and Go. Python and Javascript were about the
-  same, but Go was significantly faster. Yet, Python wasn't far from the goals
-  and I thought I could make it with multi-processing.
+  same (~8,000 req/s), but Go was significantly faster (~22,000 req/s). Yet,
+  Python wasn't far from the goal and I thought I could make it work with
+  multi-processing.
 
 * [Unix Domain Socket](https://en.wikipedia.org/wiki/Unix_domain_socket): I
   thought about using Unix Domain Socket to reduce the network overhead a fair
-  amount (x5-7?) between the frontend and backend services, but it's unlikely
-  that these services would run on the same machine in a real world scenario.
-  Also, the stock inventory service handles the load just fine despite being a
-  single-process server.
+  amount between the frontend and backend services, but it's unlikely that these
+  services would run on the same machine in a real world scenario.
 
 * [Protobuf](https://developers.google.com/protocol-buffers): This could have
   been used for communication between the frontend and backend service. But I
