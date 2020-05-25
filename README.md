@@ -53,7 +53,7 @@ EOF
 
 # Preferred stock
 cat > salt_bae_buys_PS.data <<EOF
-{"name":"Salt Bae","amount":10,"class":"CS"}
+{"name":"Salt Bae","amount":10,"class":"PS"}
 EOF
 ```
 
