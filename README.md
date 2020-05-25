@@ -24,11 +24,11 @@ Once installed, we will have to start two services:
 This command will run the API server, `StockCertificateApi`. It handles incoming
 requests from `ab`.
 
-NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
-
 ```bash
 gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
+
+NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 The server will spawn one process per logical CPUs on the Mac. If you don't have
 a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
@@ -43,6 +43,8 @@ NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 ```bash
 python3 stock_cert_server.py
 ```
+
+NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 ## Benchmark
 
