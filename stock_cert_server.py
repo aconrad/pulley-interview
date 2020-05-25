@@ -7,12 +7,60 @@ from pathlib import Path
 
 import orjson as json
 
+
+"""
+                      +--------+
+                   +--------+  |
+                   | client |--+
+                   +--------+
+                      |   |
+                      |   v
+                      v
+            +-------------------------------+
+            | gunicorn spawns the processes |
+            +-------------------------------+
+
+      +------------------process---------------------+
+   +------------------process---------------------+  |
++------------------process---------------------+  |  |
+|                                              |  |  |
+|                +---------+                   |  |  |
+|                | uvicorn |                   |  |  |
+|                +---------+                   |  |  |
+|                     |                        |  |  |
+|                     v                        |  |  |
+|    +------------------------------------+    |  |  |
+|    | StockCertificateApi (frontend API) |    |  |  |
+|    |                                    |    |  |  |
+|    |         [ConnectionPool]           |    |  |  |
+|    +------------------------------------+    |  |  |
+|                     |                        |  |--+
+|                     v                        |--+
++----------------------------------------------+
+                      |   |   |
+                      |   |   v
+                      |   v
+                      v
++-------------------process--------------------+
+|                     |                        |
+|                     v                        |
+|     +---------------------------------+      |
+|     | StockInventoryService (backend) |      |
+|     +---------------------------------+      |
+|                                              |
++----------------------------------------------+
+"""
+
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
     level=logging.INFO
     # level=logging.DEBUG
 )
+
+###################
+# BACKEND SERVICE #
+###################
 
 
 class StockInventoryService:
@@ -171,6 +219,11 @@ class StockInventoryService:
 
 DB_HOST, DB_PORT = ('127.0.0.1', 8001)
 
+##############################################
+# BOOTSTRAP CODE TO START THE BACKEND SERVER #
+##############################################
+
+
 if __name__ == '__main__':
     stock_db = StockInventoryService('stockdb.dat')
     stock_db.register('CS', 2600000)  # 2.6M
@@ -217,6 +270,11 @@ class ConnectionPool:
         Return provided `reader` and `writer` streams to the DB connection pool.
         """
         self._conn_pool.append((reader, writer))
+
+
+####################
+# FRONTEND SERVICE #
+####################
 
 
 class StockCertificateApi:
@@ -322,14 +380,20 @@ class StockCertificateApi:
         yield response_body
 
 
+#################################################################
+# FRONTEND SERVICE REQUEST HANDLER CALLED BY THE HTTP FRAMEWORK #
+#################################################################
+
 stock_inventory_conn_pool = ConnectionPool(DB_HOST, DB_PORT)
 stock_cert_generator = StockCertificateApi(
     stock_inventory_conn_pool,
     'Impossible Cuts Inc.'
 )
 
-
 async def app(scope, receive, send):
+    """
+    Called by the web framework `uvicorn` upon incoming HTTP requests.
+    """
     # Lifespan requests aren't supported by gunicorn, ignore them if we see
     # them.
     if scope['type'] == 'lifespan':

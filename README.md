@@ -206,7 +206,7 @@ Transfer/sec:      2.88MB
 
 ## Approach
 
-Before I share my approach to the problem, let me restate the requirements:
+Before I share my approach to the problem, let's restate the requirements:
 
 ```markdown
 Build an API endpoint where clients can concurrently generate valid paper
