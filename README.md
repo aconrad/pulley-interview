@@ -267,12 +267,11 @@ by having each process write the number of issued certificates in their own
 file. When we need the next certificate number, we could then aggregate the sum
 of the counts. But that approach seemed fragile and might slow us down because
 we'd have to read each file (disk access) and sum the counters for every
-request.
+certificate to be issued. It could work fine with a database, but this seemed
+tedious for this exercise.
 
-Also, a detail that was brought to my attention later was that certificate
-should no longer issue certificates once the total number of shares have been
-distributed. This was more that just a counter, but a bit of inventory
-management.
+Also, the service should not issue certificates once all shares have been
+distributed. This becomes more than just a counter, it's inventory management.
 
 ### Build a stock inventory service
 
