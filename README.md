@@ -28,7 +28,7 @@ requests from `ab`.
 gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
 
-> NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
+> **NOTE:** ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 The server will spawn one process per logical CPUs on the Mac. If you don't have
 a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
@@ -42,7 +42,7 @@ inventory changes. In a separate terminal run:
 python3 stock_cert_server.py
 ```
 
-> NOTE: ensure the Python vitualenv is activated with `. venv/bin/activate`
+> **NOTE:** ensure the Python vitualenv is activated with `. venv/bin/activate`
 
 ## Benchmark
 
@@ -71,8 +71,8 @@ ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0
 ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_PS.data 'http://127.0.0.1:8000/'
 ```
 
-> NOTE: I noticed that running `ab` twice in a row on MacOs must put some sort
-of strain on the kernel/network and causes the second run to hang for a few
+> **NOTE:** I noticed that running `ab` twice in a row on MacOs must put some
+sort of strain on the kernel/network and causes the second run to hang for a few
 seconds at ~6000 requests but it eventually finishes within a few more seconds.
 I give it ~40 seconds between runs to show best results.
 
@@ -184,12 +184,12 @@ Requests/sec:  13324.21
 Transfer/sec:      3.18MB
 ```
 
-> NOTE: Don't confuse "Req/Sec" (per thread) and Requests/sec (total).
+> **NOTE:** Don't confuse "Req/Sec" (per thread) and Requests/sec (total).
 
 Running it multiple times in a row show more consistent results compared by
 `ab`.
 
-> Note: you might get 403s after you run out of shares and if you do the
+> **NOTE:** you might get 403s after you run out of shares and if you do the
 mention "Non-2xx or 3xx responses" will appear:
 
 ```
@@ -249,8 +249,8 @@ and a simple certificate generator. But unfortunately I couldn't get
 passed ~7,000 req/s and the requirement was 10,000 req/s. You can see this
 version [here](https://github.com/aconrad/pulley-interview/blob/6683606921c71ede571816343d28ad7a3876793f/stock_cert_server.py).
 
-NOTE: this version did not persist the changes to disk and it didn't register a
-total number of shares.
+> **NOTE:** this version did not persist the changes to disk and it didn't
+register a total number of shares.
 
 My next step was to spawn multiple processes of the service but that would cause
 duplicate certificates to be generated, evidently. We could certainly ingest the
