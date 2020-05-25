@@ -208,7 +208,7 @@ Transfer/sec:      2.88MB
 
 Before I share my approach to the problem, let me restate the requirements:
 
-```md
+```markdown
 Build an API endpoint where clients can concurrently generate valid paper
 certificates.
 
@@ -233,7 +233,7 @@ should also be able to service 10,000 queries per second.
 
 The requirements were later updated with the following:
 
-```md
+```markdown
 Each security class (common and preferred) is initialized with a total number
 of authorized shares. If there aren’t enough shares left to be issued in
 response to a request, it should return an error.
