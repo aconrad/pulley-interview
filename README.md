@@ -5,7 +5,7 @@
 After cloning the repository and with Python>=3.7 installed, run the following
 commands:
 
-```
+```bash
 python3 -m venv venv
 . venv/bin/activate
 pip install uvicorn orjson gunicorn
@@ -24,7 +24,7 @@ Once installed, we will have to start two services:
 This command will run the API server, `StockCertificateApi`. It handles incoming
 requests from `ab`.
 
-```
+```bash
 gunicorn -w `sysctl -n hw.logicalcpu` -k uvicorn.workers.UvicornWorker stock_cert_server:app
 ```
 
@@ -33,9 +33,10 @@ a Mac, replace `sysctl -n hw.logicalcpu` with the number of CPU cores x 2.
 
 ### Stock Inventory Service (TCP backend server)
 
-This will run `StockInventoryService`.
+This will run `StockInventoryService`. It's the backend service that tracks
+inventory changes.
 
-```
+```bash
 python3 stock_cert_server.py
 ```
 
@@ -44,7 +45,13 @@ python3 stock_cert_server.py
 Let's prepare a JSON file that we will use as our request payload for each
 request:
 
-```
+```bash
+# Common stock
+cat > salt_bae_buys_CS.data <<EOF
+{"name":"Salt Bae","amount":10,"class":"CS"}
+EOF
+
+# Preferred stock
 cat > salt_bae_buys_CS.data <<EOF
 {"name":"Salt Bae","amount":10,"class":"CS"}
 EOF
@@ -52,7 +59,11 @@ EOF
 
 Then we will use Apache Benchmark (command `ab`) to measure server performance.
 
-```
+```bash
+# Request common stock
+ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0.0.1:8000/'
+
+# Request preferred stock
 ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0.0.1:8000/'
 ```
 
@@ -217,17 +228,18 @@ so I decided that I would write a log of all the transactions in a file called
 the stock inventory changes, you can see all the changes happening in this file.
 It's also a nice way to check that no certificates are duplicated or have gaps.
 
-To squeeze in more speed, I decided to write my own (basic) serialization
-protocol to spare myself from the the slower JSON serialization process.
-
-You see the transactions in realtime by running:
+You see the inventory updates in realtime by running:
 
 ```
 tail -f stockdb.dat
 ```
 
-When the backend starts, it finds the last line in the log and uses that as the
-latest known transaction to restart where it left off. Granting more certificates.
+To squeeze in more speed, I decided to write my own (basic) serialization
+protocol to save me from the the slower JSON serialization process. Got an
+additional ~1,000 req/s.
+
+When the backend starts, it finds the last line in `stockdb.dat` and uses it as
+the latest known transaction so it can restart where it left off.
 
 ## Technology decisions
 

@@ -209,6 +209,10 @@ class ConnectionPool:
         else:
             reader, writer = self._conn_pool.pop()
 
+            # If the connection is closed, try the next one
+            # if writer.is_closing():
+            #     reader, writer = await self.acquire()  # recursive
+
         return (reader, writer)
 
     def release(self, reader, writer):
