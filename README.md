@@ -52,7 +52,7 @@ cat > salt_bae_buys_CS.data <<EOF
 EOF
 
 # Preferred stock
-cat > salt_bae_buys_CS.data <<EOF
+cat > salt_bae_buys_PS.data <<EOF
 {"name":"Salt Bae","amount":10,"class":"CS"}
 EOF
 ```
@@ -64,7 +64,7 @@ Then we will use Apache Benchmark (command `ab`) to measure server performance.
 ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0.0.1:8000/'
 
 # Request preferred stock
-ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_CS.data 'http://127.0.0.1:8000/'
+ab -n 10000 -c 20 -T 'application/json' -p ./salt_bae_buys_PS.data 'http://127.0.0.1:8000/'
 ```
 
 ```
@@ -230,7 +230,7 @@ It's also a nice way to check that no certificates are duplicated or have gaps.
 
 You see the inventory updates in realtime by running:
 
-```
+```bash
 tail -f stockdb.dat
 ```
 
